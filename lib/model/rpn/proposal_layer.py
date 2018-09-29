@@ -119,7 +119,6 @@ class _ProposalLayer(nn.Module):
         # proposals_keep = proposals.view(-1, 4)[keep_idx, :].contiguous().view(batch_size, trim_size, 4)
         
         # _, order = torch.sort(scores_keep, 1, True)
-        
         scores_keep = scores
         proposals_keep = proposals
         _, order = torch.sort(scores_keep, 1, True)

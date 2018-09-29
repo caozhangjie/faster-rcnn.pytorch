@@ -26,6 +26,7 @@ from torch.utils.data.sampler import Sampler
 
 from roi_data_layer.roidb import combined_roidb
 from roi_data_layer.roibatchLoader import roibatchLoader
+from roi_data_layer.JAADLoader import JAADLoader
 from model.utils.config import cfg, cfg_from_file, cfg_from_list, get_output_dir
 from model.utils.net_utils import weights_normal_init, save_net, load_net, \
       adjust_learning_rate, save_checkpoint, clip_gradient
@@ -115,10 +116,15 @@ def parse_args():
   parser.add_argument('--use_tfb', dest='use_tfboard',
                       help='whether use tensorboard',
                       action='store_true')
+  parser.add_argument('--snapshot_interval', dest='snapshot_interval',
+                      help='iteration between snapshot', default=5000, type=int)
 
   args = parser.parse_args()
   return args
 
+class imdb_JAAD(object):
+    def __init__(self):
+        self.classes = range(2)
 
 class sampler(Sampler):
   def __init__(self, train_size, batch_size):
@@ -174,6 +180,8 @@ if __name__ == '__main__':
       args.imdb_name = "vg_150-50-50_minitrain"
       args.imdbval_name = "vg_150-50-50_minival"
       args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '50']
+  elif args.dataset == "JAAD":
+      args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32, 64]', 'ANCHOR_RATIOS', '[2.5]', 'MAX_NUM_GT_BOXES', '30']
 
   args.cfg_file = "cfgs/{}_ls.yml".format(args.net) if args.large_scale else "cfgs/{}.yml".format(args.net)
 
@@ -194,22 +202,30 @@ if __name__ == '__main__':
   # -- Note: Use validation set and disable the flipped to enable faster loading.
   cfg.TRAIN.USE_FLIPPED = True
   cfg.USE_GPU_NMS = args.cuda
-  imdb, roidb, ratio_list, ratio_index = combined_roidb(args.imdb_name)
-  train_size = len(roidb)
+  if args.dataset != "JAAD":
+    imdb, roidb, ratio_list, ratio_index = combined_roidb(args.imdb_name)
+    train_size = len(roidb)
 
-  print('{:d} roidb entries'.format(len(roidb)))
+    print('{:d} roidb entries'.format(len(roidb)))
 
-  output_dir = args.save_dir + "/" + args.net + "/" + args.dataset
-  if not os.path.exists(output_dir):
-    os.makedirs(output_dir)
+    sampler_batch = sampler(train_size, args.batch_size)
 
-  sampler_batch = sampler(train_size, args.batch_size)
-
-  dataset = roibatchLoader(roidb, ratio_list, ratio_index, args.batch_size, \
+    dataset = roibatchLoader(roidb, ratio_list, ratio_index, args.batch_size, \
                            imdb.num_classes, training=True)
+  else:
+    dataset = JAADLoader('/data/JAAD_clip_images', '/data/JAAD_vbb/vbb_full')
+    train_size = len(dataset)
+    imdb = imdb_JAAD()
+
+    print('{:d} roidb entries'.format(len(dataset)))
+
+    sampler_batch = sampler(train_size, args.batch_size)
 
   dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size,
                             sampler=sampler_batch, num_workers=args.num_workers)
+  output_dir = args.save_dir + "/" + args.net + "/" + args.dataset
+  if not os.path.exists(output_dir):
+      os.makedirs(output_dir)
 
   # initilize the tensor holder here.
   im_data = torch.FloatTensor(1)
@@ -368,17 +384,17 @@ if __name__ == '__main__':
         loss_temp = 0
         start = time.time()
 
-    
-    save_name = os.path.join(output_dir, 'faster_rcnn_{}_{}_{}.pth'.format(args.session, epoch, step))
-    save_checkpoint({
-      'session': args.session,
-      'epoch': epoch + 1,
-      'model': fasterRCNN.module.state_dict() if args.mGPUs else fasterRCNN.state_dict(),
-      'optimizer': optimizer.state_dict(),
-      'pooling_mode': cfg.POOLING_MODE,
-      'class_agnostic': args.class_agnostic,
-    }, save_name)
-    print('save model: {}'.format(save_name))
+        if ((epoch-1) * iters_per_epoch + step) % args.snapshot_interval == 0:
+            save_name = os.path.join(output_dir, 'faster_rcnn_{}_{}_{}.pth'.format(args.session, epoch, step))
+            save_checkpoint({
+            'session': args.session,
+            'epoch': epoch + 1,
+            'model': fasterRCNN.module.state_dict() if args.mGPUs else fasterRCNN.state_dict(),
+            'optimizer': optimizer.state_dict(),
+            'pooling_mode': cfg.POOLING_MODE,
+            'class_agnostic': args.class_agnostic,
+            }, save_name)
+            print('save model: {}'.format(save_name))
 
   if args.use_tfboard:
     logger.close()

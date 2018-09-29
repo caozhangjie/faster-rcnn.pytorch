@@ -23,6 +23,7 @@ import torch.optim as optim
 import pickle
 from roi_data_layer.roidb import combined_roidb
 from roi_data_layer.roibatchLoader import roibatchLoader
+from roi_data_layer.JAADLoader import JAADLoader
 from model.utils.config import cfg, cfg_from_file, cfg_from_list, get_output_dir
 from model.rpn.bbox_transform import clip_boxes
 from model.nms.nms_wrapper import nms
@@ -86,8 +87,14 @@ def parse_args():
   parser.add_argument('--vis', dest='vis',
                       help='visualization mode',
                       action='store_true')
+  parser.add_argument('--output_dir', dest='output_dir', default="test_result", help='output directory')
   args = parser.parse_args()
   return args
+
+class imdb_JAAD(object):
+    def __init__(self):
+        self.classes = ['__background__', 'pedestrian']
+        self.num_classes = 2
 
 lr = cfg.TRAIN.LEARNING_RATE
 momentum = cfg.TRAIN.MOMENTUM
@@ -124,6 +131,8 @@ if __name__ == '__main__':
       args.imdb_name = "vg_150-50-50_minitrain"
       args.imdbval_name = "vg_150-50-50_minival"
       args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]']
+  elif args.dataset == 'JAAD':
+      args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32, 64]', 'ANCHOR_RATIOS', '[2.5]']  
 
   args.cfg_file = "cfgs/{}_ls.yml".format(args.net) if args.large_scale else "cfgs/{}.yml".format(args.net)
 
@@ -136,10 +145,16 @@ if __name__ == '__main__':
   pprint.pprint(cfg)
 
   cfg.TRAIN.USE_FLIPPED = False
-  imdb, roidb, ratio_list, ratio_index = combined_roidb(args.imdbval_name, False)
-  imdb.competition_mode(on=True)
+  if args.dataset != 'JAAD':
+    imdb, roidb, ratio_list, ratio_index = combined_roidb(args.imdbval_name, False)
+    imdb.competition_mode(on=True)
+    dataset = roibatchLoader(roidb, ratio_list, ratio_index, 1, \
+                        imdb.num_classes, training=False, normalize = False)
 
-  print('{:d} roidb entries'.format(len(roidb)))
+    print('{:d} roidb entries'.format(len(roidb)))
+  else:
+    dataset = JAADLoader('/data/JAAD_clip_images', '/data/JAAD_vbb/vbb_full', 'test')
+    imdb = imdb_JAAD()
 
   input_dir = args.load_dir + "/" + args.net + "/" + args.dataset
   if not os.path.exists(input_dir):
@@ -206,13 +221,18 @@ if __name__ == '__main__':
     thresh = 0.0
 
   save_name = 'faster_rcnn_10'
-  num_images = len(imdb.image_index)
+  if args.dataset == 'JAAD':
+    num_images = len(dataset)
+  else:
+    num_images = len(imdb.image_index)
   all_boxes = [[[] for _ in xrange(num_images)]
                for _ in xrange(imdb.num_classes)]
 
-  output_dir = get_output_dir(imdb, save_name)
-  dataset = roibatchLoader(roidb, ratio_list, ratio_index, 1, \
-                        imdb.num_classes, training=False, normalize = False)
+  output_dir = os.path.join(args.output_dir, args.dataset, \
+         '{}_{}_{}'.format(args.checksession, args.checkepoch, args.checkpoint))
+  if not os.path.exists(output_dir):
+    os.makedirs(output_dir)
+
   dataloader = torch.utils.data.DataLoader(dataset, batch_size=1,
                             shuffle=False, num_workers=0,
                             pin_memory=True)
@@ -269,8 +289,11 @@ if __name__ == '__main__':
       detect_time = det_toc - det_tic
       misc_tic = time.time()
       if vis:
+        if args.dataset != 'JAAD':
           im = cv2.imread(imdb.image_path_at(i))
-          im2show = np.copy(im)
+        else:
+          im = cv2.imread(dataset.imgs[i])
+        im2show = np.copy(im)
       for j in xrange(1, imdb.num_classes):
           inds = torch.nonzero(scores[:,j]>thresh).view(-1)
           # if there is det
@@ -320,7 +343,7 @@ if __name__ == '__main__':
       pickle.dump(all_boxes, f, pickle.HIGHEST_PROTOCOL)
 
   print('Evaluating detections')
-  imdb.evaluate_detections(all_boxes, output_dir)
+  #imdb.evaluate_detections(all_boxes, output_dir)
 
   end = time.time()
   print("test time: %0.4fs" % (end - start))

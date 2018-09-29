@@ -156,7 +156,6 @@ class roibatchLoader(data.Dataset):
                 # update gt bounding box according the trip
                 gt_boxes[:, 0].clamp_(0, trim_size - 1)
                 gt_boxes[:, 2].clamp_(0, trim_size - 1)
-
         # based on the ratio, padding the image.
         if ratio < 1:
             # this means that data_width < data_height
@@ -184,7 +183,6 @@ class roibatchLoader(data.Dataset):
             gt_boxes[:, :4].clamp_(0, trim_size)
             im_info[0, 0] = trim_size
             im_info[0, 1] = trim_size
-
 
         # check the bounding box:
         not_keep = (gt_boxes[:,0] == gt_boxes[:,2]) | (gt_boxes[:,1] == gt_boxes[:,3])

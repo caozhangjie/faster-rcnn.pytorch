@@ -41,7 +41,8 @@ class _fasterRCNN(nn.Module):
 
         im_info = im_info.data
         gt_boxes = gt_boxes.data
-        num_boxes = num_boxes.data
+        #num_boxes = num_boxes.data
+        num_boxes = None
 
         # feed image data to base model to obtain base feature map
         base_feat = self.RCNN_base(im_data)
@@ -134,3 +135,4 @@ class _fasterRCNN(nn.Module):
     def create_architecture(self):
         self._init_modules()
         self._init_weights()
+
