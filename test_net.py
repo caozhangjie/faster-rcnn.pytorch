@@ -88,6 +88,7 @@ def parse_args():
                       help='visualization mode',
                       action='store_true')
   parser.add_argument('--output_dir', dest='output_dir', default="test_result", help='output directory')
+  parser.add_argument('--snapshot_name', dest='snapshot_name', default='JAADtrain', help='snapshot name')
   args = parser.parse_args()
   return args
 
@@ -153,10 +154,10 @@ if __name__ == '__main__':
 
     print('{:d} roidb entries'.format(len(roidb)))
   else:
-    dataset = JAADLoader('/data/JAAD_clip_images', '/data/JAAD_vbb/vbb_full', 'test')
+    dataset = JAADLoader('/data/JAAD/JAAD_clip_images', '/workspace/caozhangjie/inplace_abn/JAAD_vbb/vbb_full', 'test')
     imdb = imdb_JAAD()
 
-  input_dir = args.load_dir + "/" + args.net + "/" + args.dataset
+  input_dir = args.load_dir + "/" + args.net + "/" + args.snapshot_name
   if not os.path.exists(input_dir):
     raise Exception('There is no input directory for loading network from ' + input_dir)
   load_name = os.path.join(input_dir,
@@ -228,7 +229,7 @@ if __name__ == '__main__':
   all_boxes = [[[] for _ in xrange(num_images)]
                for _ in xrange(imdb.num_classes)]
 
-  output_dir = os.path.join(args.output_dir, args.dataset, \
+  output_dir = os.path.join(args.output_dir, args.snapshot_name, \
          '{}_{}_{}'.format(args.checksession, args.checkepoch, args.checkpoint))
   if not os.path.exists(output_dir):
     os.makedirs(output_dir)
@@ -244,6 +245,7 @@ if __name__ == '__main__':
 
   fasterRCNN.eval()
   empty_array = np.transpose(np.array([[],[],[],[],[]]), (1,0))
+  img_paths = []
   for i in range(num_images):
 
       data = next(data_iter)
@@ -251,6 +253,7 @@ if __name__ == '__main__':
       im_info.data.resize_(data[1].size()).copy_(data[1])
       gt_boxes.data.resize_(data[2].size()).copy_(data[2])
       num_boxes.data.resize_(data[3].size()).copy_(data[3])
+      img_paths.append(data[4][0])
 
       det_tic = time.time()
       rois, cls_prob, bbox_pred, \
@@ -292,7 +295,7 @@ if __name__ == '__main__':
         if args.dataset != 'JAAD':
           im = cv2.imread(imdb.image_path_at(i))
         else:
-          im = cv2.imread(dataset.imgs[i])
+          im = cv2.imread(dataset.imgs[i][0])
         im2show = np.copy(im)
       for j in xrange(1, imdb.num_classes):
           inds = torch.nonzero(scores[:,j]>thresh).view(-1)
@@ -335,12 +338,15 @@ if __name__ == '__main__':
 
       if vis:
           cv2.imwrite('result.png', im2show)
-          pdb.set_trace()
+          #pdb.set_trace()
           #cv2.imshow('test', im2show)
           #cv2.waitKey(0)
 
   with open(det_file, 'wb') as f:
       pickle.dump(all_boxes, f, pickle.HIGHEST_PROTOCOL)
+  with open(os.path.join(output_dir, 'img_path.txt'), "w") as f:
+      for line in img_paths:
+        f.write(line+"\n")
 
   print('Evaluating detections')
   #imdb.evaluate_detections(all_boxes, output_dir)

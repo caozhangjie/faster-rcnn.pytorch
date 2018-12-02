@@ -22,6 +22,7 @@ import os.path as opath
 class JAADLoader(data.Dataset):
   def __init__(self, img_root, bbox_root, phase='train'):
     dir_list = os.listdir(img_root)
+    self.phase=phase
     self.imgs = []
     for dir_ in dir_list:
         dir_id = int(dir_.split("_")[1].split(".")[0])
@@ -55,7 +56,10 @@ class JAADLoader(data.Dataset):
         pos_l[:, 0:4] = pos
         pos_l[:, 4] = 1.0
     pos = torch.from_numpy(pos_l).float()
-    return img, im_info, pos, num_boxes
+    if self.phase == 'train':
+        return img, im_info, pos, num_boxes
+    else:
+        return img, im_info, pos, num_boxes, img_path
 
   def __len__(self):
     return len(self.imgs)

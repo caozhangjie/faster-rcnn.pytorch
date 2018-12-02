@@ -119,6 +119,8 @@ def parse_args():
   parser.add_argument('--snapshot_interval', dest='snapshot_interval',
                       help='iteration between snapshot', default=5000, type=int)
 
+  parser.add_argument('--prefix', dest='prefix', help='output directory prefix')
+
   args = parser.parse_args()
   return args
 
@@ -213,7 +215,7 @@ if __name__ == '__main__':
     dataset = roibatchLoader(roidb, ratio_list, ratio_index, args.batch_size, \
                            imdb.num_classes, training=True)
   else:
-    dataset = JAADLoader('/data/JAAD_clip_images', '/data/JAAD_vbb/vbb_full')
+    dataset = JAADLoader('/data/JAAD_clip_images', '/workspace/caozhangjie/inplace_abn/JAAD_vbb/vbb_full', 'train')
     train_size = len(dataset)
     imdb = imdb_JAAD()
 
@@ -223,7 +225,7 @@ if __name__ == '__main__':
 
   dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size,
                             sampler=sampler_batch, num_workers=args.num_workers)
-  output_dir = args.save_dir + "/" + args.net + "/" + args.dataset
+  output_dir = args.save_dir + "/" + args.net + "/" + args.dataset + args.prefix
   if not os.path.exists(output_dir):
       os.makedirs(output_dir)
 
@@ -384,7 +386,7 @@ if __name__ == '__main__':
         loss_temp = 0
         start = time.time()
 
-        if ((epoch-1) * iters_per_epoch + step) % args.snapshot_interval == 0:
+      if ((epoch-1) * iters_per_epoch + step) % args.snapshot_interval == 0:
             save_name = os.path.join(output_dir, 'faster_rcnn_{}_{}_{}.pth'.format(args.session, epoch, step))
             save_checkpoint({
             'session': args.session,

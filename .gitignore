@@ -204,3 +204,5 @@ lib/pycocotools/_mask.c
 
 logs/*
 models/*
+*.png
+test_result/*
